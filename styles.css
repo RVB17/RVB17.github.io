@@ -426,6 +426,12 @@ h1 {
     font-weight: 500;
 }
 
+.project-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
 .project-link {
     width: 40px;
     height: 40px;
