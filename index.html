@@ -321,6 +321,86 @@ router.<span class="fn">post</span>(<span class="str">'/join'</span>, <span clas
                 </div>
             </div>
         </article>
+
+        <!-- Project 4: Pickleball Point Detection -->
+        <article class="project-card" id="project-pickleball">
+            <div class="project-header">
+                <div class="project-icon" style="--icon-bg: linear-gradient(135deg, #ef4444, #f97316);">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                </div>
+                <div class="project-title-group">
+                    <h3>Pickleball Point Detection</h3>
+                    <span class="project-tagline">Computer vision pipeline for automated scoring</span>
+                </div>
+                <div class="project-actions">
+                    <a href="point_detection.html" target="_blank" rel="noopener" class="project-link" title="View Notebook">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                    </a>
+                    <a href="https://github.com/RVB17/point_detection" target="_blank" rel="noopener" class="project-link" title="Source Code">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    </a>
+                </div>
+            </div>
+
+            <p class="project-description">
+                A computer vision proof-of-concept for <strong>automated pickleball/tennis point detection</strong>. Uses a fine-tuned <strong>ResNet50</strong> to detect 14 court keypoints, a custom-trained <strong>YOLOv5</strong> model for ball tracking, and a pre-trained <strong>YOLOv8</strong> for player detection. The pipeline stitches these together to analyze ball trajectory, detect bounces via peak detection on the Y-coordinate time series, classify hits, and determine in/out calls using convex hull geometry over the detected court boundary.
+            </p>
+
+            <div class="tech-stack">
+                <span class="tech-tag" style="--tag-color: #3776ab;">Python</span>
+                <span class="tech-tag" style="--tag-color: #ee4c2c;">PyTorch</span>
+                <span class="tech-tag" style="--tag-color: #ff6f00;">YOLOv5/v8</span>
+                <span class="tech-tag" style="--tag-color: #4caf50;">OpenCV</span>
+                <span class="tech-tag" style="--tag-color: #11557c;">ResNet50</span>
+                <span class="tech-tag" style="--tag-color: #3f51b5;">Matplotlib</span>
+            </div>
+
+            <div class="code-snippets">
+                <div class="snippet-tabs">
+                    <button class="snippet-tab active" data-target="pickle-keypoints">court_detection.py</button>
+                    <button class="snippet-tab" data-target="pickle-bounce">bounce_analysis.py</button>
+                </div>
+                <div class="snippet-content" id="pickle-keypoints">
+                    <pre><code class="language-python"><span class="kw">def</span> <span class="fn">get_court_keypoints</span>(frame, model, transform, device):
+    h, w = frame.shape[:<span class="num">2</span>]
+    img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    img_tensor = transform(img_rgb).unsqueeze(<span class="num">0</span>).to(device)
+
+    <span class="kw">with</span> torch.no_grad():
+        outputs = model(img_tensor)
+
+    kps = outputs[<span class="num">0</span>].cpu().numpy()
+
+    <span class="cmt"># Map keypoints back to the original frame dimensions</span>
+    kps[::<span class="num">2</span>] *= w / <span class="num">224.0</span>
+    kps[<span class="num">1</span>::<span class="num">2</span>] *= h / <span class="num">224.0</span>
+
+    <span class="kw">return</span> [(<span class="fn">int</span>(kps[i]), <span class="fn">int</span>(kps[i+<span class="num">1</span>]))
+            <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="num">0</span>, <span class="fn">len</span>(kps), <span class="num">2</span>)]</code></pre>
+                </div>
+                <div class="snippet-content hidden" id="pickle-bounce">
+                    <pre><code class="language-python"><span class="cmt"># Analyze ball trajectory for V-shapes in y-axis</span>
+y_coords = [pos[<span class="num">1</span>] <span class="kw">if</span> pos <span class="kw">else</span> <span class="num">None</span>
+            <span class="kw">for</span> pos <span class="kw">in</span> ball_trajectory]
+
+bounces = []
+<span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="num">2</span>, <span class="fn">len</span>(y_coords)-<span class="num">2</span>):
+    <span class="kw">if</span> y_coords[i] <span class="kw">is not</span> <span class="num">None</span>:
+        <span class="cmt"># Simple peak detection</span>
+        <span class="cmt"># (y-axis is inverted: max y = lowest point)</span>
+        prev1 = y_coords[i-<span class="num">1</span>] <span class="kw">if</span> y_coords[i-<span class="num">1</span>] \
+                <span class="kw">is not</span> <span class="num">None</span> <span class="kw">else</span> y_coords[i]
+        next1 = y_coords[i+<span class="num">1</span>] <span class="kw">if</span> y_coords[i+<span class="num">1</span>] \
+                <span class="kw">is not</span> <span class="num">None</span> <span class="kw">else</span> y_coords[i]
+
+        <span class="kw">if</span> prev1 < y_coords[i] <span class="kw">and</span> next1 < y_coords[i]:
+            <span class="cmt"># Potential bounce/hit detected</span>
+            bounces.append(i)
+
+<span class="fn">print</span>(<span class="str">f"Detected {<span class="fn">len</span>(bounces)} potential bounces"</span>)</code></pre>
+                </div>
+            </div>
+        </article>
     </section>
 
     <!-- About Section -->
@@ -332,7 +412,7 @@ router.<span class="fn">post</span>(<span class="str">'/join'</span>, <span clas
                 <p>I'm focused on <strong>Machine Learning and AI</strong> — designing algorithms, building inference pipelines, and exploring agentic coding patterns. In my free time I'm a musician, so my personal projects tend to bridge these interests: applying ML techniques like clustering and recommendation systems to creative, music-oriented domains.</p>
                 <div class="about-stats">
                     <div class="stat">
-                        <span class="stat-number" id="repo-count">3</span>
+                        <span class="stat-number" id="repo-count">4</span>
                         <span class="stat-label">Projects</span>
                     </div>
                     <div class="stat">
