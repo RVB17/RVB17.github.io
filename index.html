@@ -72,7 +72,7 @@
                 </div>
                 <div class="project-title-group">
                     <h3>Musync</h3>
-                    <span class="project-tagline">AI-powered social music platform</span>
+                    <span class="project-tagline">GMM-based recommendation engine</span>
                 </div>
                 <a href="https://github.com/RVB17/musync" target="_blank" rel="noopener" class="project-link" title="Source Code">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
@@ -80,99 +80,115 @@
             </div>
 
             <p class="project-description">
-                A full-stack app where I designed and implemented a <strong>Gaussian Mixture Model recommendation engine</strong> from scratch. The GMM clusters user listening profiles across five audio feature dimensions (danceability, energy, valence, acousticness, instrumentalness) and applies vibe-aware penalty functions to surface contextually relevant suggestions. Built as a microservice architecture with a Python ML backend, Node.js API layer, and Supabase for persistence — an exercise in connecting ML inference pipelines to real-time user-facing products.
+                A full-stack social music platform built around a <strong>Gaussian Mixture Model recommendation engine</strong> deployed as a FastAPI microservice on Render. The GMM clusters user listening profiles across five Spotify audio features and powers multiple recommendation strategies: <strong>multi-user probability overlap</strong> for group playlists (multiplying log-likelihoods across all members' GMMs), a <strong>tolerance-based scoring system</strong> for mixed groups, and <strong>collaborative filtering via weighted GMM centroid distance</strong> in 5D feature space to match similar users. The system also implements <strong>online learning</strong> — dynamically shifting cluster weights and means using predict_proba feedback on likes/skips, creating an adaptive taste profile that evolves with user behavior.
             </p>
 
             <div class="tech-stack">
                 <span class="tech-tag" style="--tag-color: #3776ab;">Python</span>
                 <span class="tech-tag" style="--tag-color: #ff6f00;">scikit-learn</span>
+                <span class="tech-tag" style="--tag-color: #009688;">FastAPI</span>
                 <span class="tech-tag" style="--tag-color: #f7df1e;">JavaScript</span>
                 <span class="tech-tag" style="--tag-color: #3178c6;">TypeScript</span>
                 <span class="tech-tag" style="--tag-color: #2496ed;">Docker</span>
                 <span class="tech-tag" style="--tag-color: #3ecf8e;">Supabase</span>
+                <span class="tech-tag" style="--tag-color: #4351e8;">Render</span>
             </div>
 
             <div class="code-snippets">
                 <div class="snippet-tabs">
-                    <button class="snippet-tab active" data-target="musync-ai">gmm_engine.py</button>
-                    <button class="snippet-tab" data-target="musync-party">parties.js</button>
+                    <button class="snippet-tab active" data-target="musync-ai">party_overlap.py</button>
+                    <button class="snippet-tab" data-target="musync-cf">collaborative_filtering.py</button>
+                    <button class="snippet-tab" data-target="musync-feedback">online_learning.py</button>
                 </div>
                 <div class="snippet-content" id="musync-ai">
-                    <pre><code class="language-python"><span class="kw">import</span> numpy <span class="kw">as</span> np
-<span class="kw">from</span> sklearn.mixture <span class="kw">import</span> GaussianMixture
+                    <pre><code class="language-python"><span class="kw">def</span> <span class="fn">compute_party_overlap</span>(user_gmms, candidates, vibe):
+    <span class="str">"""Venn diagram overlap — multiply probabilities
+    across all users' GMMs to find universal hits."""</span>
+    gmms = [rebuild_gmm(u) <span class="kw">for</span> u <span class="kw">in</span> user_gmms]
+    X = extract_features(candidates)
+    scores = []
 
-<span class="kw">def</span> <span class="fn">apply_vibe_penalty</span>(track_features, vibe: <span class="type">str</span>) -> <span class="type">float</span>:
-    <span class="str">"""Applies a scalar penalty (0.0–1.0) based on target vibe."""</span>
-    <span class="kw">if not</span> vibe <span class="kw">or</span> vibe == <span class="str">"Any"</span>:
-        <span class="kw">return</span> <span class="num">1.0</span>
+    <span class="kw">for</span> i, feats <span class="kw">in</span> <span class="fn">enumerate</span>(X):
+        <span class="cmt"># Log-likelihood from each user's GMM</span>
+        total_log_prob = <span class="fn">sum</span>(
+            gmm.score_samples([feats])[<span class="num">0</span>]
+            <span class="kw">for</span> gmm <span class="kw">in</span> gmms
+        )
+        combined = np.exp(total_log_prob)
 
-    vibe = vibe.lower()
-    <span class="kw">if</span> vibe == <span class="str">"energetic"</span>:
-        <span class="kw">if</span> track_features.energy < <span class="num">0.6</span>:
-            <span class="kw">return</span> <span class="num">0.1</span>  <span class="cmt"># 90% penalty to low-energy songs</span>
-        <span class="kw">elif</span> track_features.danceability < <span class="num">0.5</span>:
-            <span class="kw">return</span> <span class="num">0.5</span>  <span class="cmt"># 50% penalty to hard-to-dance songs</span>
-    <span class="kw">return</span> <span class="num">1.0</span>
+        <span class="cmt"># Apply contextual vibe penalty</span>
+        penalty = apply_vibe_penalty(candidates[i], vibe)
+        scores.append({
+            <span class="str">"track_id"</span>: candidates[i].id,
+            <span class="str">"score"</span>: <span class="fn">float</span>(combined * penalty)
+        })
 
-<span class="kw">def</span> <span class="fn">fit_user_gmm</span>(tracks, n_components: <span class="type">int</span> = <span class="num">3</span>):
-    <span class="str">"""Fits a GMM to a user's track history."""</span>
-    X = extract_features(tracks)
-    actual_components = <span class="fn">min</span>(n_components, <span class="fn">len</span>(tracks))
+    scores.sort(key=<span class="kw">lambda</span> x: x[<span class="str">"score"</span>], reverse=<span class="num">True</span>)
+    <span class="kw">return</span> scores</code></pre>
+                </div>
+                <div class="snippet-content hidden" id="musync-cf">
+                    <pre><code class="language-python"><span class="kw">def</span> <span class="fn">get_gmm_centroid</span>(params):
+    <span class="str">"""Weighted center of all clusters —
+    the 'absolute average' of a user's taste."""</span>
+    weights = np.array(params[<span class="str">"weights"</span>])
+    means = np.array(params[<span class="str">"means"</span>])
+    <span class="kw">return</span> np.average(means, axis=<span class="num">0</span>, weights=weights)
 
-    gmm = GaussianMixture(
-        n_components=actual_components,
-        covariance_type=<span class="str">'full'</span>,
-        random_state=<span class="num">42</span>
-    )
-    gmm.fit(X)
+<span class="kw">def</span> <span class="fn">compute_cf_distance</span>(target_gmm, global_gmms):
+    <span class="str">"""Finds nearest users by comparing GMM centroids
+    via Euclidean distance in 5D feature space."""</span>
+    target = get_gmm_centroid(target_gmm)
+    results = []
+
+    <span class="kw">for</span> uid, params <span class="kw">in</span> global_gmms.items():
+        centroid = get_gmm_centroid(params)
+
+        <span class="cmt"># Euclidean distance → similarity score</span>
+        dist = np.linalg.norm(target - centroid)
+        similarity = <span class="num">1.0</span> / (<span class="num">1.0</span> + <span class="fn">float</span>(dist))
+
+        results.append({
+            <span class="str">"user_id"</span>: uid,
+            <span class="str">"similarity"</span>: similarity
+        })
+
+    results.sort(key=<span class="kw">lambda</span> x: x[<span class="str">"similarity"</span>],
+                 reverse=<span class="num">True</span>)
+    <span class="kw">return</span> results</code></pre>
+                </div>
+                <div class="snippet-content hidden" id="musync-feedback">
+                    <pre><code class="language-python"><span class="kw">def</span> <span class="fn">apply_feedback</span>(user_gmm, track_features, action):
+    <span class="str">"""Online learning — dynamically shifts GMM
+    cluster weights/means on each like or skip."""</span>
+    gmm = rebuild_gmm(user_gmm)
+    X = extract_features([track_features])
+
+    <span class="cmt"># Which clusters does this track belong to?</span>
+    probs = gmm.predict_proba(X)[<span class="num">0</span>]
+
+    weights = np.array(user_gmm[<span class="str">"weights"</span>])
+    means = np.array(user_gmm[<span class="str">"means"</span>])
+    learning_rate = <span class="num">0.1</span>
+
+    <span class="kw">if</span> action == <span class="str">"like"</span>:
+        <span class="cmt"># Boost matching clusters, shift means closer</span>
+        weights += learning_rate * probs
+        <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="fn">len</span>(means)):
+            means[i] += learning_rate * probs[i] \
+                        * (X[<span class="num">0</span>] - means[i])
+    <span class="kw">elif</span> action == <span class="str">"skip"</span>:
+        <span class="cmt"># Penalize matching clusters (min 1%)</span>
+        weights -= learning_rate * probs
+        weights = np.clip(weights, <span class="num">0.01</span>, <span class="num">None</span>)
+
+    <span class="cmt"># Re-normalize to sum to 1.0</span>
+    weights /= np.sum(weights)
 
     <span class="kw">return</span> {
-        <span class="str">"weights"</span>: gmm.weights_.tolist(),
-        <span class="str">"means"</span>: gmm.means_.tolist(),
-        <span class="str">"covariances"</span>: gmm.covariances_.tolist()
+        <span class="str">"weights"</span>: weights.tolist(),
+        <span class="str">"means"</span>: means.tolist(),
+        <span class="str">"covariances"</span>: user_gmm[<span class="str">"covariances"</span>]
     }</code></pre>
-                </div>
-                <div class="snippet-content hidden" id="musync-party">
-                    <pre><code class="language-javascript"><span class="kw">const</span> express = <span class="fn">require</span>(<span class="str">'express'</span>);
-<span class="kw">const</span> router = express.Router();
-<span class="kw">const</span> supabase = <span class="fn">require</span>(<span class="str">'./supabaseClient'</span>);
-
-<span class="cmt">// Create a new party</span>
-router.<span class="fn">post</span>(<span class="str">'/'</span>, <span class="kw">async</span> (req, res) => {
-  <span class="kw">const</span> {
-    name,
-    vibe = <span class="str">'Chill'</span>,
-    location = { lat: <span class="num">0</span>, lng: <span class="num">0</span> }
-  } = req.body;
-  <span class="kw">const</span> user = req.user.id;
-
-  <span class="kw">const</span> { data: party, error } = <span class="kw">await</span> supabase
-    .<span class="fn">from</span>(<span class="str">'parties'</span>)
-    .<span class="fn">insert</span>({ name, vibe, members: [user], location })
-    .<span class="fn">select</span>()
-    .<span class="fn">single</span>();
-
-  <span class="kw">if</span> (error) <span class="kw">return</span> res.<span class="fn">status</span>(<span class="num">500</span>).<span class="fn">json</span>({ error: error.message });
-  res.<span class="fn">json</span>(party);
-});
-
-<span class="cmt">// Join a party by code</span>
-router.<span class="fn">post</span>(<span class="str">'/join'</span>, <span class="kw">async</span> (req, res) => {
-  <span class="kw">const</span> { code } = req.body;
-  <span class="kw">const</span> user = req.user.id;
-  <span class="kw">const</span> { data: party } = <span class="kw">await</span> supabase
-    .<span class="fn">from</span>(<span class="str">'parties'</span>)
-    .<span class="fn">select</span>(<span class="str">'*'</span>)
-    .<span class="fn">eq</span>(<span class="str">'id'</span>, code)
-    .<span class="fn">single</span>();
-
-  <span class="kw">if</span> (party && !party.members.<span class="fn">includes</span>(user)) {
-    <span class="kw">const</span> members = [...party.members, user];
-    <span class="kw">await</span> supabase.<span class="fn">from</span>(<span class="str">'parties'</span>)
-      .<span class="fn">update</span>({ members })
-      .<span class="fn">eq</span>(<span class="str">'id'</span>, code);
-  }
-});</code></pre>
                 </div>
             </div>
         </article>
